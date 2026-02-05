@@ -1,4 +1,4 @@
-import { useState } from "react";
+ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   Search,
@@ -22,6 +22,8 @@ import {
   Undo,
   Redo,
   Columns,
+   Loader2,
+   CheckCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,14 +40,21 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+ import { useFormDefinitions, useSaveFormFields, usePublishForm, type FormField as DBFormField } from "@/hooks/useFormDefinitions";
+ import { CreateFormModal } from "@/components/modals/CreateFormModal";
+ import { toast } from "@/hooks/use-toast";
 
 interface Field {
   id: string;
+   field_key: string;
   label: string;
   type: string;
   icon: React.ElementType;
   required: boolean;
   readOnly: boolean;
+   isSystem: boolean;
+   helpText?: string;
+   defaultValue?: string;
 }
 
 const fieldTypes = [
@@ -59,27 +68,70 @@ const fieldTypes = [
 ];
 
 const systemFields: Field[] = [
-  { id: "sys-1", label: "Asset ID", type: "text", icon: Type, required: true, readOnly: true },
-  { id: "sys-2", label: "Created Date", type: "date", icon: Calendar, required: true, readOnly: true },
-  { id: "sys-3", label: "Modified Date", type: "date", icon: Calendar, required: true, readOnly: true },
-  { id: "sys-4", label: "Created By", type: "lookup", icon: Link2, required: true, readOnly: true },
+   { id: "sys-1", field_key: "asset_id", label: "Asset ID", type: "text", icon: Type, required: true, readOnly: true, isSystem: true },
+   { id: "sys-2", field_key: "created_date", label: "Created Date", type: "date", icon: Calendar, required: true, readOnly: true, isSystem: true },
+   { id: "sys-3", field_key: "modified_date", label: "Modified Date", type: "date", icon: Calendar, required: true, readOnly: true, isSystem: true },
+   { id: "sys-4", field_key: "created_by", label: "Created By", type: "lookup", icon: Link2, required: true, readOnly: true, isSystem: true },
 ];
 
 const customFields: Field[] = [
-  { id: "cust-1", label: "Serial Number", type: "text", icon: Type, required: true, readOnly: false },
-  { id: "cust-2", label: "Manufacturer", type: "dropdown", icon: List, required: false, readOnly: false },
-  { id: "cust-3", label: "Installation Date", type: "date", icon: Calendar, required: false, readOnly: false },
-  { id: "cust-4", label: "Rated Power (kW)", type: "number", icon: Hash, required: false, readOnly: false },
-  { id: "cust-5", label: "Operating Hours", type: "number", icon: Hash, required: false, readOnly: false },
+   { id: "cust-1", field_key: "serial_number", label: "Serial Number", type: "text", icon: Type, required: true, readOnly: false, isSystem: false },
+   { id: "cust-2", field_key: "manufacturer", label: "Manufacturer", type: "dropdown", icon: List, required: false, readOnly: false, isSystem: false },
+   { id: "cust-3", field_key: "installation_date", label: "Installation Date", type: "date", icon: Calendar, required: false, readOnly: false, isSystem: false },
+   { id: "cust-4", field_key: "rated_power", label: "Rated Power (kW)", type: "number", icon: Hash, required: false, readOnly: false, isSystem: false },
+   { id: "cust-5", field_key: "operating_hours", label: "Operating Hours", type: "number", icon: Hash, required: false, readOnly: false, isSystem: false },
 ];
 
+ const getIconForType = (type: string): React.ElementType => {
+   const found = fieldTypes.find((f) => f.type === type);
+   return found?.icon || Type;
+ };
+ 
 const FormBuilder = () => {
   const [selectedField, setSelectedField] = useState<Field | null>(null);
-  const [formFields, setFormFields] = useState<Field[]>([
-    ...systemFields.slice(0, 2),
-    ...customFields.slice(0, 3),
-  ]);
+   const [formFields, setFormFields] = useState<Field[]>([]);
   const [activeTab, setActiveTab] = useState("general");
+   const [createModalOpen, setCreateModalOpen] = useState(false);
+   const [selectedFormId, setSelectedFormId] = useState<string | null>(null);
+   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+ 
+   const { data: forms, isLoading } = useFormDefinitions();
+   const saveFieldsMutation = useSaveFormFields();
+   const publishMutation = usePublishForm();
+ 
+   // Select first form if none selected
+   useEffect(() => {
+     if (forms?.length && !selectedFormId) {
+       setSelectedFormId(forms[0].id);
+     }
+   }, [forms, selectedFormId]);
+ 
+   // Load form fields when selected form changes
+   useEffect(() => {
+     if (selectedFormId && forms) {
+       const form = forms.find((f) => f.id === selectedFormId);
+       if (form?.form_fields) {
+         const loadedFields: Field[] = form.form_fields.map((f) => ({
+           id: f.id,
+           field_key: f.field_key,
+           label: f.label,
+           type: f.field_type,
+           icon: getIconForType(f.field_type),
+           required: f.is_required,
+           readOnly: f.is_readonly,
+           isSystem: f.is_system_field,
+           helpText: f.help_text || undefined,
+           defaultValue: f.default_value || undefined,
+         }));
+         setFormFields(loadedFields);
+         setHasUnsavedChanges(false);
+       } else {
+         setFormFields([]);
+       }
+     }
+   }, [selectedFormId, forms]);
+ 
+   const selectedForm = forms?.find((f) => f.id === selectedFormId);
 
   const handleDragStart = (e: React.DragEvent, field: Field) => {
     e.dataTransfer.setData("field", JSON.stringify(field));
@@ -90,8 +142,14 @@ const FormBuilder = () => {
     const fieldData = e.dataTransfer.getData("field");
     if (fieldData) {
       const field = JSON.parse(fieldData) as Field;
-      if (!formFields.find((f) => f.id === field.id)) {
-        setFormFields([...formFields, field]);
+       // Generate unique ID for new fields
+       const newField = {
+         ...field,
+         id: `new-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+       };
+       if (!formFields.find((f) => f.field_key === field.field_key)) {
+         setFormFields([...formFields, newField]);
+         setHasUnsavedChanges(true);
       }
     }
   };
@@ -105,7 +163,47 @@ const FormBuilder = () => {
     if (selectedField?.id === fieldId) {
       setSelectedField(null);
     }
+     setHasUnsavedChanges(true);
   };
+ 
+   const handleSave = async () => {
+     if (!selectedFormId) return;
+     
+     const fieldsToSave = formFields.map((f, i) => ({
+       field_key: f.field_key,
+       label: f.label,
+       field_type: f.type,
+       tab: activeTab,
+       is_required: f.required,
+       is_readonly: f.readOnly,
+       is_visible: true,
+       is_system_field: f.isSystem,
+       sort_order: i,
+       column_span: 1,
+       help_text: f.helpText || null,
+       default_value: f.defaultValue || null,
+       placeholder: null,
+       options: null,
+       validation_rules: null,
+       section: null,
+     }));
+ 
+     await saveFieldsMutation.mutateAsync({ formId: selectedFormId, fields: fieldsToSave });
+     setHasUnsavedChanges(false);
+   };
+ 
+   const handlePublish = async () => {
+     if (!selectedFormId) return;
+     await publishMutation.mutateAsync(selectedFormId);
+   };
+ 
+   const updateSelectedField = (updates: Partial<Field>) => {
+     if (!selectedField) return;
+     const updated = { ...selectedField, ...updates };
+     setSelectedField(updated);
+     setFormFields(formFields.map((f) => (f.id === selectedField.id ? updated : f)));
+     setHasUnsavedChanges(true);
+   };
 
   return (
     <div className="space-y-6">
@@ -128,12 +226,77 @@ const FormBuilder = () => {
             <Play className="w-4 h-4" />
             Preview
           </Button>
-          <Button className="gap-2">
+           <Button 
+             className="gap-2" 
+             onClick={handleSave}
+             disabled={saveFieldsMutation.isPending || !hasUnsavedChanges}
+           >
+             {saveFieldsMutation.isPending ? (
+               <Loader2 className="w-4 h-4 animate-spin" />
+             ) : (
             <Save className="w-4 h-4" />
+             )}
             Save Draft
           </Button>
+           <Button 
+             variant="secondary"
+             className="gap-2" 
+             onClick={handlePublish}
+             disabled={publishMutation.isPending || !selectedFormId}
+           >
+             {publishMutation.isPending ? (
+               <Loader2 className="w-4 h-4 animate-spin" />
+             ) : (
+               <CheckCircle className="w-4 h-4" />
+             )}
+             Publish
+           </Button>
         </div>
       </div>
+ 
+       {/* Form Selector */}
+       {isLoading ? (
+         <div className="flex items-center justify-center h-64">
+           <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+         </div>
+       ) : forms?.length === 0 ? (
+         <Card className="shadow-card">
+           <CardContent className="flex flex-col items-center justify-center py-16">
+             <FileText className="w-12 h-12 text-muted-foreground/40 mb-4" />
+             <h3 className="text-lg font-medium text-foreground mb-2">No forms yet</h3>
+             <p className="text-muted-foreground text-sm mb-4">Create your first form to start building</p>
+             <Button onClick={() => setCreateModalOpen(true)}>
+               <Plus className="w-4 h-4 mr-2" />
+               Create Form
+             </Button>
+           </CardContent>
+         </Card>
+       ) : (
+         <>
+           <div className="flex items-center gap-4">
+             <Select value={selectedFormId || ""} onValueChange={setSelectedFormId}>
+               <SelectTrigger className="w-64">
+                 <SelectValue placeholder="Select a form" />
+               </SelectTrigger>
+               <SelectContent>
+                 {forms?.map((form) => (
+                   <SelectItem key={form.id} value={form.id}>
+                     {form.name}
+                     {form.is_published && <Badge variant="outline" className="ml-2 text-xs">Published</Badge>}
+                   </SelectItem>
+                 ))}
+               </SelectContent>
+             </Select>
+             <Button variant="outline" onClick={() => setCreateModalOpen(true)}>
+               <Plus className="w-4 h-4 mr-2" />
+               New Form
+             </Button>
+             {hasUnsavedChanges && (
+               <Badge variant="outline" className="bg-warning/10 text-warning border-warning/20">
+                 Unsaved changes
+               </Badge>
+             )}
+           </div>
 
       <div className="grid grid-cols-12 gap-6 h-[calc(100vh-220px)]">
         {/* Left Panel - Field Library */}
@@ -228,13 +391,19 @@ const FormBuilder = () => {
             <CardHeader className="pb-3 shrink-0 border-b">
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="text-lg">Motor Inspection Form</CardTitle>
-                  <p className="text-xs text-muted-foreground mt-1">Asset Type: Motor</p>
+                   <CardTitle className="text-lg">{selectedForm?.name || "Select a form"}</CardTitle>
+                   <p className="text-xs text-muted-foreground mt-1">{selectedForm?.description || "No description"}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="bg-warning/10 text-warning border-warning/20">
-                    Draft
-                  </Badge>
+                   <Badge 
+                     variant="outline" 
+                     className={selectedForm?.is_published 
+                       ? "bg-success/10 text-success border-success/20" 
+                       : "bg-warning/10 text-warning border-warning/20"
+                     }
+                   >
+                     {selectedForm?.is_published ? "Published" : "Draft"}
+                   </Badge>
                   <Button variant="outline" size="sm" className="gap-1.5">
                     <Columns className="w-4 h-4" />
                     2 Columns
@@ -333,12 +502,19 @@ const FormBuilder = () => {
                 <div className="space-y-5">
                   <div className="space-y-2">
                     <Label htmlFor="fieldLabel">Label</Label>
-                    <Input id="fieldLabel" value={selectedField.label} />
+                     <Input 
+                       id="fieldLabel" 
+                       value={selectedField.label} 
+                       onChange={(e) => updateSelectedField({ label: e.target.value })}
+                     />
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="fieldType">Field Type</Label>
-                    <Select value={selectedField.type}>
+                     <Select 
+                       value={selectedField.type}
+                       onValueChange={(v) => updateSelectedField({ type: v, icon: getIconForType(v) })}
+                     >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -358,12 +534,19 @@ const FormBuilder = () => {
                       id="helpText"
                       placeholder="Enter help text for users..."
                       className="h-20 resize-none"
+                       value={selectedField.helpText || ""}
+                       onChange={(e) => updateSelectedField({ helpText: e.target.value })}
                     />
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="defaultValue">Default Value</Label>
-                    <Input id="defaultValue" placeholder="Enter default value..." />
+                     <Input 
+                       id="defaultValue" 
+                       placeholder="Enter default value..."
+                       value={selectedField.defaultValue || ""}
+                       onChange={(e) => updateSelectedField({ defaultValue: e.target.value })}
+                     />
                   </div>
 
                   <div className="space-y-3">
@@ -374,14 +557,20 @@ const FormBuilder = () => {
                           <Asterisk className="w-4 h-4 text-muted-foreground" />
                           <span className="text-sm">Required</span>
                         </div>
-                        <Switch checked={selectedField.required} />
+                         <Switch 
+                           checked={selectedField.required} 
+                           onCheckedChange={(v) => updateSelectedField({ required: v })}
+                         />
                       </div>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <Lock className="w-4 h-4 text-muted-foreground" />
                           <span className="text-sm">Read-only</span>
                         </div>
-                        <Switch checked={selectedField.readOnly} />
+                         <Switch 
+                           checked={selectedField.readOnly} 
+                           onCheckedChange={(v) => updateSelectedField({ readOnly: v })}
+                         />
                       </div>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
@@ -432,6 +621,15 @@ const FormBuilder = () => {
           </Card>
         </motion.div>
       </div>
+       </>
+       )}
+ 
+       {/* Create Form Modal */}
+       <CreateFormModal 
+         open={createModalOpen} 
+         onOpenChange={setCreateModalOpen}
+         onCreated={(formId) => setSelectedFormId(formId)}
+       />
     </div>
   );
 };

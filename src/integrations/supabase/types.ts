@@ -14,7 +14,323 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      asset_types: {
+        Row: {
+          created_at: string
+          description: string | null
+          icon: string | null
+          id: string
+          name: string
+          status: Database["public"]["Enums"]["lifecycle_status"]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          name: string
+          status?: Database["public"]["Enums"]["lifecycle_status"]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          name?: string
+          status?: Database["public"]["Enums"]["lifecycle_status"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      assets: {
+        Row: {
+          asset_type_id: string | null
+          created_at: string
+          criticality: Database["public"]["Enums"]["criticality_level"]
+          data: Json
+          hierarchy_level: Database["public"]["Enums"]["hierarchy_level"]
+          id: string
+          location: string | null
+          name: string
+          parent_id: string | null
+          status: Database["public"]["Enums"]["asset_status"]
+          updated_at: string
+        }
+        Insert: {
+          asset_type_id?: string | null
+          created_at?: string
+          criticality?: Database["public"]["Enums"]["criticality_level"]
+          data?: Json
+          hierarchy_level?: Database["public"]["Enums"]["hierarchy_level"]
+          id?: string
+          location?: string | null
+          name: string
+          parent_id?: string | null
+          status?: Database["public"]["Enums"]["asset_status"]
+          updated_at?: string
+        }
+        Update: {
+          asset_type_id?: string | null
+          created_at?: string
+          criticality?: Database["public"]["Enums"]["criticality_level"]
+          data?: Json
+          hierarchy_level?: Database["public"]["Enums"]["hierarchy_level"]
+          id?: string
+          location?: string | null
+          name?: string
+          parent_id?: string | null
+          status?: Database["public"]["Enums"]["asset_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assets_asset_type_id_fkey"
+            columns: ["asset_type_id"]
+            isOneToOne: false
+            referencedRelation: "asset_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assets_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      audit_log: {
+        Row: {
+          action: string
+          changes: Json | null
+          entity_id: string
+          entity_type: string
+          id: string
+          performed_at: string
+          performed_by: string | null
+        }
+        Insert: {
+          action: string
+          changes?: Json | null
+          entity_id: string
+          entity_type: string
+          id?: string
+          performed_at?: string
+          performed_by?: string | null
+        }
+        Update: {
+          action?: string
+          changes?: Json | null
+          entity_id?: string
+          entity_type?: string
+          id?: string
+          performed_at?: string
+          performed_by?: string | null
+        }
+        Relationships: []
+      }
+      field_permissions: {
+        Row: {
+          can_edit: boolean
+          can_view: boolean
+          created_at: string
+          field_id: string
+          id: string
+          role: string
+        }
+        Insert: {
+          can_edit?: boolean
+          can_view?: boolean
+          created_at?: string
+          field_id: string
+          id?: string
+          role: string
+        }
+        Update: {
+          can_edit?: boolean
+          can_view?: boolean
+          created_at?: string
+          field_id?: string
+          id?: string
+          role?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "field_permissions_field_id_fkey"
+            columns: ["field_id"]
+            isOneToOne: false
+            referencedRelation: "form_fields"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      form_definitions: {
+        Row: {
+          asset_type_id: string | null
+          created_at: string
+          description: string | null
+          id: string
+          is_published: boolean
+          name: string
+          status: Database["public"]["Enums"]["lifecycle_status"]
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          asset_type_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_published?: boolean
+          name: string
+          status?: Database["public"]["Enums"]["lifecycle_status"]
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          asset_type_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_published?: boolean
+          name?: string
+          status?: Database["public"]["Enums"]["lifecycle_status"]
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "form_definitions_asset_type_id_fkey"
+            columns: ["asset_type_id"]
+            isOneToOne: false
+            referencedRelation: "asset_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      form_fields: {
+        Row: {
+          column_span: number | null
+          created_at: string
+          default_value: string | null
+          field_key: string
+          field_type: string
+          form_id: string
+          help_text: string | null
+          id: string
+          is_readonly: boolean
+          is_required: boolean
+          is_system_field: boolean
+          is_visible: boolean
+          label: string
+          options: Json | null
+          placeholder: string | null
+          section: string | null
+          sort_order: number
+          tab: string
+          updated_at: string
+          validation_rules: Json | null
+        }
+        Insert: {
+          column_span?: number | null
+          created_at?: string
+          default_value?: string | null
+          field_key: string
+          field_type?: string
+          form_id: string
+          help_text?: string | null
+          id?: string
+          is_readonly?: boolean
+          is_required?: boolean
+          is_system_field?: boolean
+          is_visible?: boolean
+          label: string
+          options?: Json | null
+          placeholder?: string | null
+          section?: string | null
+          sort_order?: number
+          tab?: string
+          updated_at?: string
+          validation_rules?: Json | null
+        }
+        Update: {
+          column_span?: number | null
+          created_at?: string
+          default_value?: string | null
+          field_key?: string
+          field_type?: string
+          form_id?: string
+          help_text?: string | null
+          id?: string
+          is_readonly?: boolean
+          is_required?: boolean
+          is_system_field?: boolean
+          is_visible?: boolean
+          label?: string
+          options?: Json | null
+          placeholder?: string | null
+          section?: string | null
+          sort_order?: number
+          tab?: string
+          updated_at?: string
+          validation_rules?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "form_fields_form_id_fkey"
+            columns: ["form_id"]
+            isOneToOne: false
+            referencedRelation: "form_definitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      form_rules: {
+        Row: {
+          actions: Json
+          conditions: Json
+          created_at: string
+          description: string | null
+          form_id: string | null
+          id: string
+          is_enabled: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          actions?: Json
+          conditions?: Json
+          created_at?: string
+          description?: string | null
+          form_id?: string | null
+          id?: string
+          is_enabled?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          actions?: Json
+          conditions?: Json
+          created_at?: string
+          description?: string | null
+          form_id?: string | null
+          id?: string
+          is_enabled?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "form_rules_form_id_fkey"
+            columns: ["form_id"]
+            isOneToOne: false
+            referencedRelation: "form_definitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +339,19 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      asset_status: "Active" | "Maintenance" | "Inactive"
+      criticality_level: "High" | "Medium" | "Low"
+      hierarchy_level:
+        | "Enterprise"
+        | "Site"
+        | "Area"
+        | "System"
+        | "Unit"
+        | "Subunit"
+        | "Component"
+        | "Part"
+        | "Sensor"
+      lifecycle_status: "Active" | "Draft" | "Deprecated"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +478,21 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      asset_status: ["Active", "Maintenance", "Inactive"],
+      criticality_level: ["High", "Medium", "Low"],
+      hierarchy_level: [
+        "Enterprise",
+        "Site",
+        "Area",
+        "System",
+        "Unit",
+        "Subunit",
+        "Component",
+        "Part",
+        "Sensor",
+      ],
+      lifecycle_status: ["Active", "Draft", "Deprecated"],
+    },
   },
 } as const

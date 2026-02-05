@@ -1,4 +1,5 @@
-import { motion } from "framer-motion";
+ import { useMemo } from "react";
+ import { motion } from "framer-motion";
 import {
   Box,
   Layers,
@@ -9,79 +10,125 @@ import {
   Plus,
   ArrowRight,
   Activity,
+   Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
-
-const stats = [
-  {
-    label: "Total Assets",
-    value: "2,847",
-    change: "+12%",
-    trend: "up",
-    icon: Box,
-    color: "text-primary",
-    bgColor: "bg-primary/10",
-  },
-  {
-    label: "Asset Types",
-    value: "12",
-    change: "+2",
-    trend: "up",
-    icon: Layers,
-    color: "text-info",
-    bgColor: "bg-info/10",
-  },
-  {
-    label: "Draft Forms",
-    value: "5",
-    change: "In progress",
-    trend: "neutral",
-    icon: FileEdit,
-    color: "text-warning",
-    bgColor: "bg-warning/10",
-  },
-  {
-    label: "Published Forms",
-    value: "24",
-    change: "+3 this week",
-    trend: "up",
-    icon: CheckCircle,
-    color: "text-success",
-    bgColor: "bg-success/10",
-  },
-];
-
-const recentActivity = [
-  {
-    action: "Asset created",
-    description: "Motor #M-2847 added to Production Line A",
-    time: "2 minutes ago",
-    icon: Box,
-  },
-  {
-    action: "Form published",
-    description: "Gearbox Inspection Form v2.3",
-    time: "15 minutes ago",
-    icon: CheckCircle,
-  },
-  {
-    action: "Asset updated",
-    description: "Pump #P-1234 status changed to Maintenance",
-    time: "1 hour ago",
-    icon: Activity,
-  },
-  {
-    action: "Rule added",
-    description: "Critical asset validation rule enabled",
-    time: "3 hours ago",
-    icon: TrendingUp,
-  },
-];
+ import { useAssets } from "@/hooks/useAssets";
+ import { useAssetTypes } from "@/hooks/useAssetTypes";
+ import { useFormDefinitions } from "@/hooks/useFormDefinitions";
+ import { useFormRules } from "@/hooks/useFormRules";
 
 const Dashboard = () => {
   const navigate = useNavigate();
+   const { data: assets, isLoading: assetsLoading } = useAssets();
+   const { data: assetTypes, isLoading: typesLoading } = useAssetTypes();
+   const { data: forms, isLoading: formsLoading } = useFormDefinitions();
+   const { data: rules } = useFormRules();
+ 
+   const isLoading = assetsLoading || typesLoading || formsLoading;
+ 
+   const stats = useMemo(() => {
+     const draftForms = forms?.filter((f) => !f.is_published).length || 0;
+     const publishedForms = forms?.filter((f) => f.is_published).length || 0;
+ 
+     return [
+       {
+         label: "Total Assets",
+         value: assets?.length || 0,
+         change: "All time",
+         trend: "up" as const,
+         icon: Box,
+         color: "text-primary",
+         bgColor: "bg-primary/10",
+       },
+       {
+         label: "Asset Types",
+         value: assetTypes?.length || 0,
+         change: "Configured",
+         trend: "up" as const,
+         icon: Layers,
+         color: "text-info",
+         bgColor: "bg-info/10",
+       },
+       {
+         label: "Draft Forms",
+         value: draftForms,
+         change: "In progress",
+         trend: "neutral" as const,
+         icon: FileEdit,
+         color: "text-warning",
+         bgColor: "bg-warning/10",
+       },
+       {
+         label: "Published Forms",
+         value: publishedForms,
+         change: "Live",
+         trend: "up" as const,
+         icon: CheckCircle,
+         color: "text-success",
+         bgColor: "bg-success/10",
+       },
+     ];
+   }, [assets, assetTypes, forms]);
+ 
+   // Generate recent activity from actual data
+   const recentActivity = useMemo(() => {
+     const activities: Array<{
+       action: string;
+       description: string;
+       time: string;
+       icon: typeof Box;
+     }> = [];
+ 
+     // Add recent assets
+     assets?.slice(0, 2).forEach((asset) => {
+       activities.push({
+         action: "Asset created",
+         description: `${asset.name} added`,
+         time: new Date(asset.created_at).toLocaleDateString(),
+         icon: Box,
+       });
+     });
+ 
+     // Add recent forms
+     forms?.slice(0, 1).forEach((form) => {
+       activities.push({
+         action: form.is_published ? "Form published" : "Form created",
+         description: form.name,
+         time: new Date(form.updated_at).toLocaleDateString(),
+         icon: form.is_published ? CheckCircle : FileEdit,
+       });
+     });
+ 
+     // Add recent rules
+     rules?.slice(0, 1).forEach((rule) => {
+       activities.push({
+         action: "Rule added",
+         description: rule.name,
+         time: new Date(rule.created_at).toLocaleDateString(),
+         icon: TrendingUp,
+       });
+     });
+ 
+     return activities.length > 0 ? activities : [
+       {
+         action: "Welcome!",
+         description: "Start by creating your first asset type",
+         time: "Now",
+         icon: Activity,
+       },
+     ];
+   }, [assets, forms, rules]);
+ 
+   if (isLoading) {
+     return (
+       <div className="flex items-center justify-center h-64">
+         <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+       </div>
+     );
+   }
 
   return (
     <div className="space-y-6">
@@ -119,7 +166,7 @@ const Dashboard = () => {
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="text-sm text-muted-foreground mb-1">{stat.label}</p>
-                    <p className="text-3xl font-bold text-foreground">{stat.value}</p>
+                     <p className="text-3xl font-bold text-foreground">{stat.value.toLocaleString()}</p>
                     <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
                       {stat.trend === "up" && (
                         <TrendingUp className="w-3 h-3 text-success" />

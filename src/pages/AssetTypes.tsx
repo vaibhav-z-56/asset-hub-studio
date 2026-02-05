@@ -1,5 +1,6 @@
-import { motion } from "framer-motion";
-import { Layers, Plus, Box, FileText, MoreVertical, Edit, Trash2 } from "lucide-react";
+ import { useState } from "react";
+ import { motion } from "framer-motion";
+ import { Layers, Plus, Box, FileText, MoreVertical, Edit, Trash2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,17 +10,33 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
-const assetTypes = [
-  { id: "1", name: "Motor", count: 847, forms: 3, status: "Active" },
-  { id: "2", name: "Pump", count: 523, forms: 2, status: "Active" },
-  { id: "3", name: "Gearbox", count: 312, forms: 2, status: "Active" },
-  { id: "4", name: "Compressor", count: 156, forms: 1, status: "Active" },
-  { id: "5", name: "Valve", count: 1245, forms: 2, status: "Active" },
-  { id: "6", name: "Conveyor", count: 89, forms: 1, status: "Draft" },
-];
+ import { useAssetTypes, useDeleteAssetType, type AssetType } from "@/hooks/useAssetTypes";
+ import { CreateAssetTypeModal } from "@/components/modals/CreateAssetTypeModal";
+ import {
+   AlertDialog,
+   AlertDialogAction,
+   AlertDialogCancel,
+   AlertDialogContent,
+   AlertDialogDescription,
+   AlertDialogFooter,
+   AlertDialogHeader,
+   AlertDialogTitle,
+ } from "@/components/ui/alert-dialog";
 
 const AssetTypes = () => {
+   const { data: assetTypes, isLoading } = useAssetTypes();
+   const deleteMutation = useDeleteAssetType();
+   const [createModalOpen, setCreateModalOpen] = useState(false);
+   const [editingType, setEditingType] = useState<AssetType | null>(null);
+   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+ 
+   const handleDelete = async () => {
+     if (deleteConfirmId) {
+       await deleteMutation.mutateAsync(deleteConfirmId);
+       setDeleteConfirmId(null);
+     }
+   };
+ 
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -30,15 +47,32 @@ const AssetTypes = () => {
             Manage and organize your asset type definitions
           </p>
         </div>
-        <Button>
+         <Button onClick={() => setCreateModalOpen(true)}>
           <Plus className="w-4 h-4 mr-2" />
           Create Asset Type
         </Button>
       </div>
 
       {/* Asset Types Grid */}
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {assetTypes.map((type, i) => (
+       {isLoading ? (
+         <div className="flex items-center justify-center h-64">
+           <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+         </div>
+       ) : assetTypes?.length === 0 ? (
+         <Card className="shadow-card">
+           <CardContent className="flex flex-col items-center justify-center py-16">
+             <Layers className="w-12 h-12 text-muted-foreground/40 mb-4" />
+             <h3 className="text-lg font-medium text-foreground mb-2">No asset types yet</h3>
+             <p className="text-muted-foreground text-sm mb-4">Create your first asset type to get started</p>
+             <Button onClick={() => setCreateModalOpen(true)}>
+               <Plus className="w-4 h-4 mr-2" />
+               Create Asset Type
+             </Button>
+           </CardContent>
+         </Card>
+       ) : (
+         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+           {assetTypes?.map((type, i) => (
           <motion.div
             key={type.id}
             initial={{ opacity: 0, y: 20 }}
@@ -77,10 +111,13 @@ const AssetTypes = () => {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem>
+                         <DropdownMenuItem onClick={() => setEditingType(type)}>
                         <Edit className="w-4 h-4 mr-2" /> Edit
                       </DropdownMenuItem>
-                      <DropdownMenuItem className="text-destructive">
+                         <DropdownMenuItem 
+                           className="text-destructive"
+                           onClick={() => setDeleteConfirmId(type.id)}
+                         >
                         <Trash2 className="w-4 h-4 mr-2" /> Delete
                       </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -88,21 +125,55 @@ const AssetTypes = () => {
                 </div>
               </CardHeader>
               <CardContent>
+                   {type.description && (
+                     <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{type.description}</p>
+                   )}
                 <div className="flex items-center gap-6">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Box className="w-4 h-4" />
-                    <span>{type.count} assets</span>
+                       <span>0 assets</span>
                   </div>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <FileText className="w-4 h-4" />
-                    <span>{type.forms} forms</span>
+                       <span>0 forms</span>
                   </div>
                 </div>
               </CardContent>
             </Card>
           </motion.div>
-        ))}
-      </div>
+           ))}
+         </div>
+       )}
+ 
+       {/* Create/Edit Modal */}
+       <CreateAssetTypeModal
+         open={createModalOpen || !!editingType}
+         onOpenChange={(open) => {
+           if (!open) {
+             setCreateModalOpen(false);
+             setEditingType(null);
+           }
+         }}
+         editingType={editingType}
+       />
+ 
+       {/* Delete Confirmation */}
+       <AlertDialog open={!!deleteConfirmId} onOpenChange={() => setDeleteConfirmId(null)}>
+         <AlertDialogContent>
+           <AlertDialogHeader>
+             <AlertDialogTitle>Delete Asset Type?</AlertDialogTitle>
+             <AlertDialogDescription>
+               This action cannot be undone. This will permanently delete the asset type and all associated forms.
+             </AlertDialogDescription>
+           </AlertDialogHeader>
+           <AlertDialogFooter>
+             <AlertDialogCancel>Cancel</AlertDialogCancel>
+             <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+               Delete
+             </AlertDialogAction>
+           </AlertDialogFooter>
+         </AlertDialogContent>
+       </AlertDialog>
     </div>
   );
 };
