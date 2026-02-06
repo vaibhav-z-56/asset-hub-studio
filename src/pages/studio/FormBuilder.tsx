@@ -1,4 +1,4 @@
- import { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   Search,
@@ -13,7 +13,6 @@ import {
   Trash2,
   Settings,
   Eye,
-  EyeOff,
   Lock,
   Asterisk,
   Plus,
@@ -22,15 +21,15 @@ import {
   Undo,
   Redo,
   Columns,
-   Loader2,
-   CheckCircle,
+  Loader2,
+  CheckCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -40,21 +39,23 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
- import { useFormDefinitions, useSaveFormFields, usePublishForm, type FormField as DBFormField } from "@/hooks/useFormDefinitions";
- import { CreateFormModal } from "@/components/modals/CreateFormModal";
- import { toast } from "@/hooks/use-toast";
+import { useFormDefinitions, useSaveFormFields, usePublishForm } from "@/hooks/useFormDefinitions";
+import { CreateFormModal } from "@/components/modals/CreateFormModal";
+import { AddCustomFieldModal } from "@/components/forms/AddCustomFieldModal";
 
 interface Field {
   id: string;
-   field_key: string;
+  field_key: string;
   label: string;
   type: string;
   icon: React.ElementType;
   required: boolean;
   readOnly: boolean;
-   isSystem: boolean;
-   helpText?: string;
-   defaultValue?: string;
+  isSystem: boolean;
+  helpText?: string;
+  defaultValue?: string;
+  placeholder?: string;
+  options?: string[];
 }
 
 const fieldTypes = [
@@ -68,36 +69,30 @@ const fieldTypes = [
 ];
 
 const systemFields: Field[] = [
-   { id: "sys-1", field_key: "asset_id", label: "Asset ID", type: "text", icon: Type, required: true, readOnly: true, isSystem: true },
-   { id: "sys-2", field_key: "created_date", label: "Created Date", type: "date", icon: Calendar, required: true, readOnly: true, isSystem: true },
-   { id: "sys-3", field_key: "modified_date", label: "Modified Date", type: "date", icon: Calendar, required: true, readOnly: true, isSystem: true },
-   { id: "sys-4", field_key: "created_by", label: "Created By", type: "lookup", icon: Link2, required: true, readOnly: true, isSystem: true },
+  { id: "sys-1", field_key: "asset_id", label: "Asset ID", type: "text", icon: Type, required: true, readOnly: true, isSystem: true },
+  { id: "sys-2", field_key: "created_date", label: "Created Date", type: "date", icon: Calendar, required: true, readOnly: true, isSystem: true },
+  { id: "sys-3", field_key: "modified_date", label: "Modified Date", type: "date", icon: Calendar, required: true, readOnly: true, isSystem: true },
+  { id: "sys-4", field_key: "created_by", label: "Created By", type: "lookup", icon: Link2, required: true, readOnly: true, isSystem: true },
 ];
 
-const customFields: Field[] = [
-   { id: "cust-1", field_key: "serial_number", label: "Serial Number", type: "text", icon: Type, required: true, readOnly: false, isSystem: false },
-   { id: "cust-2", field_key: "manufacturer", label: "Manufacturer", type: "dropdown", icon: List, required: false, readOnly: false, isSystem: false },
-   { id: "cust-3", field_key: "installation_date", label: "Installation Date", type: "date", icon: Calendar, required: false, readOnly: false, isSystem: false },
-   { id: "cust-4", field_key: "rated_power", label: "Rated Power (kW)", type: "number", icon: Hash, required: false, readOnly: false, isSystem: false },
-   { id: "cust-5", field_key: "operating_hours", label: "Operating Hours", type: "number", icon: Hash, required: false, readOnly: false, isSystem: false },
-];
+const getIconForType = (type: string): React.ElementType => {
+  const found = fieldTypes.find((f) => f.type === type);
+  return found?.icon || Type;
+};
 
- const getIconForType = (type: string): React.ElementType => {
-   const found = fieldTypes.find((f) => f.type === type);
-   return found?.icon || Type;
- };
- 
 const FormBuilder = () => {
   const [selectedField, setSelectedField] = useState<Field | null>(null);
-   const [formFields, setFormFields] = useState<Field[]>([]);
+  const [formFields, setFormFields] = useState<Field[]>([]);
   const [activeTab, setActiveTab] = useState("general");
-   const [createModalOpen, setCreateModalOpen] = useState(false);
-   const [selectedFormId, setSelectedFormId] = useState<string | null>(null);
-   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
- 
-   const { data: forms, isLoading } = useFormDefinitions();
-   const saveFieldsMutation = useSaveFormFields();
-   const publishMutation = usePublishForm();
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [addFieldModalOpen, setAddFieldModalOpen] = useState(false);
+  const [selectedFormId, setSelectedFormId] = useState<string | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [libraryFields, setLibraryFields] = useState<Field[]>([]);
+
+  const { data: forms, isLoading } = useFormDefinitions();
+  const saveFieldsMutation = useSaveFormFields();
+  const publishMutation = usePublishForm();
  
    // Select first form if none selected
    useEffect(() => {
@@ -337,45 +332,44 @@ const FormBuilder = () => {
                 </div>
               </div>
 
-              {/* Custom Fields */}
-              <div>
-                <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">
-                  Custom Fields
-                </p>
-                <div className="space-y-2">
-                  {customFields.map((field) => (
-                    <div
-                      key={field.id}
-                      draggable
-                      onDragStart={(e) => handleDragStart(e, field)}
-                      className="flex items-center gap-3 p-2.5 rounded-lg border border-border bg-card hover:border-primary/50 hover:shadow-sm cursor-grab active:cursor-grabbing transition-all group"
-                    >
-                      <GripVertical className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100" />
-                      <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center">
-                        <field.icon className="w-4 h-4 text-accent-foreground" />
+              {/* Custom Fields from Library */}
+              {libraryFields.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">
+                    Your Fields
+                  </p>
+                  <div className="space-y-2">
+                    {libraryFields.map((field) => (
+                      <div
+                        key={field.id}
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, field)}
+                        className="flex items-center gap-3 p-2.5 rounded-lg border border-border bg-card hover:border-primary/50 hover:shadow-sm cursor-grab active:cursor-grabbing transition-all group"
+                      >
+                        <GripVertical className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100" />
+                        <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center">
+                          <field.icon className="w-4 h-4 text-accent-foreground" />
+                        </div>
+                        <span className="text-sm font-medium">{field.label}</span>
                       </div>
-                      <span className="text-sm font-medium">{field.label}</span>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
-              {/* Field Types */}
+              {/* Add New Field Button */}
               <div>
                 <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">
-                  Add New Field
+                  Create Field
                 </p>
-                <div className="grid grid-cols-2 gap-2">
-                  {fieldTypes.map((fieldType) => (
-                    <div
-                      key={fieldType.type}
-                      className="flex flex-col items-center gap-1.5 p-3 rounded-lg border border-dashed border-border hover:border-primary/50 hover:bg-accent/50 cursor-pointer transition-all"
-                    >
-                      <fieldType.icon className="w-5 h-5 text-muted-foreground" />
-                      <span className="text-xs text-muted-foreground">{fieldType.label}</span>
-                    </div>
-                  ))}
-                </div>
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start gap-2"
+                  onClick={() => setAddFieldModalOpen(true)}
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Custom Field
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -624,12 +618,38 @@ const FormBuilder = () => {
        </>
        )}
  
-       {/* Create Form Modal */}
-       <CreateFormModal 
-         open={createModalOpen} 
-         onOpenChange={setCreateModalOpen}
-         onCreated={(formId) => setSelectedFormId(formId)}
-       />
+      {/* Create Form Modal */}
+      <CreateFormModal 
+        open={createModalOpen} 
+        onOpenChange={setCreateModalOpen}
+        onCreated={(formId) => setSelectedFormId(formId)}
+      />
+
+      {/* Add Custom Field Modal */}
+      <AddCustomFieldModal
+        open={addFieldModalOpen}
+        onOpenChange={setAddFieldModalOpen}
+        onAdd={(fieldData) => {
+          const newField: Field = {
+            id: `lib-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            field_key: fieldData.field_key,
+            label: fieldData.label,
+            type: fieldData.type,
+            icon: getIconForType(fieldData.type),
+            required: fieldData.required,
+            readOnly: false,
+            isSystem: false,
+            helpText: fieldData.helpText,
+            defaultValue: fieldData.defaultValue,
+            placeholder: fieldData.placeholder,
+            options: fieldData.options,
+          };
+          setLibraryFields([...libraryFields, newField]);
+          // Also add to canvas immediately
+          setFormFields([...formFields, { ...newField, id: `new-${Date.now()}` }]);
+          setHasUnsavedChanges(true);
+        }}
+      />
     </div>
   );
 };
