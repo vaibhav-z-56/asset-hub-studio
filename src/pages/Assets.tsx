@@ -49,7 +49,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
  import { useAssets, useAssetHierarchy, useDeleteAsset, type Asset } from "@/hooks/useAssets";
  import { useAssetTypes } from "@/hooks/useAssetTypes";
- import { CreateAssetModal } from "@/components/modals/CreateAssetModal";
+ import { CreateAssetWizard } from "@/components/modals/CreateAssetWizard";
  import {
    AlertDialog,
    AlertDialogAction,
@@ -411,7 +411,7 @@ const Assets = () => {
       </Tabs>
  
        {/* Create Modal */}
-       <CreateAssetModal open={createModalOpen} onOpenChange={setCreateModalOpen} />
+       <CreateAssetWizard open={createModalOpen} onOpenChange={setCreateModalOpen} />
  
        {/* Delete Confirmation */}
        <AlertDialog open={!!deleteConfirmId} onOpenChange={() => setDeleteConfirmId(null)}>

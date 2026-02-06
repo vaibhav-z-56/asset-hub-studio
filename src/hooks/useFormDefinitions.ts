@@ -125,32 +125,38 @@
    });
  }
  
- export function useSaveFormFields() {
-   const queryClient = useQueryClient();
- 
-   return useMutation({
-     mutationFn: async ({ formId, fields }: { formId: string; fields: Omit<FormField, "id" | "form_id">[] }) => {
-       // Delete existing fields
-       await supabase.from("form_fields").delete().eq("form_id", formId);
- 
-       // Insert new fields
-       if (fields.length > 0) {
-         const { error } = await supabase.from("form_fields").insert(
-           fields.map((f, i) => ({ ...f, form_id: formId, sort_order: i }))
-         );
-         if (error) throw error;
-       }
-     },
-     onSuccess: (_, variables) => {
-       queryClient.invalidateQueries({ queryKey: ["form-definitions"] });
-       queryClient.invalidateQueries({ queryKey: ["form-definitions", "detail", variables.formId] });
-       toast({ title: "Form fields saved successfully" });
-     },
-     onError: (error) => {
-       toast({ title: "Failed to save form fields", description: error.message, variant: "destructive" });
-     },
-   });
- }
+export function useSaveFormFields() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ formId, fields }: { formId: string; fields: Omit<FormField, "id" | "form_id">[] }) => {
+      // Delete existing fields
+      await supabase.from("form_fields").delete().eq("form_id", formId);
+
+      // Insert new fields
+      if (fields.length > 0) {
+        const { error } = await supabase.from("form_fields").insert(
+          fields.map((f, i) => ({
+            ...f,
+            form_id: formId,
+            sort_order: i,
+            // Convert options array to JSONB if present
+            options: f.options ? (Array.isArray(f.options) ? f.options : f.options) : null,
+          }))
+        );
+        if (error) throw error;
+      }
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["form-definitions"] });
+      queryClient.invalidateQueries({ queryKey: ["form-definitions", "detail", variables.formId] });
+      toast({ title: "Form fields saved successfully" });
+    },
+    onError: (error) => {
+      toast({ title: "Failed to save form fields", description: error.message, variant: "destructive" });
+    },
+  });
+}
  
  export function usePublishForm() {
    const queryClient = useQueryClient();
