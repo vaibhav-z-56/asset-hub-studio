@@ -39,11 +39,12 @@
  
  type FormValues = z.infer<typeof formSchema>;
  
- interface Props {
-   open: boolean;
-   onOpenChange: (open: boolean) => void;
-   editingType?: AssetType | null;
- }
+interface Props {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  editingType?: AssetType | null;
+  onCreated?: (id: string) => void;
+}
  
  const iconOptions = [
    { value: "Box", label: "Box" },
@@ -55,7 +56,7 @@
    { value: "ArrowRight", label: "Conveyor" },
  ];
  
- export function CreateAssetTypeModal({ open, onOpenChange, editingType }: Props) {
+ export function CreateAssetTypeModal({ open, onOpenChange, editingType, onCreated }: Props) {
    const createMutation = useCreateAssetType();
    const updateMutation = useUpdateAssetType();
    const isEditing = !!editingType;
@@ -89,20 +90,21 @@
      }
    });
  
-   const onSubmit = async (values: FormValues) => {
-     if (isEditing) {
-       await updateMutation.mutateAsync({ id: editingType.id, ...values });
-     } else {
-       await createMutation.mutateAsync({
-         name: values.name,
-         description: values.description,
-         icon: values.icon,
-         status: values.status,
-       });
-     }
-     form.reset();
-     onOpenChange(false);
-   };
+  const onSubmit = async (values: FormValues) => {
+    if (isEditing) {
+      await updateMutation.mutateAsync({ id: editingType.id, ...values });
+    } else {
+      const result = await createMutation.mutateAsync({
+        name: values.name,
+        description: values.description,
+        icon: values.icon,
+        status: values.status,
+      });
+      onCreated?.(result.id);
+    }
+    form.reset();
+    onOpenChange(false);
+  };
  
    const isLoading = createMutation.isPending || updateMutation.isPending;
  

@@ -23,6 +23,7 @@ import {
   Columns,
   Loader2,
   CheckCircle,
+  Shield,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,7 +40,9 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Separator } from "@/components/ui/separator";
 import { useFormDefinitions, useSaveFormFields, usePublishForm } from "@/hooks/useFormDefinitions";
+import { useAssetTypeFields } from "@/hooks/useAssetTypeFields";
 import { CreateFormModal } from "@/components/modals/CreateFormModal";
 import { AddCustomFieldModal } from "@/components/forms/AddCustomFieldModal";
 
@@ -52,6 +55,7 @@ interface Field {
   required: boolean;
   readOnly: boolean;
   isSystem: boolean;
+  isCoreField?: boolean;
   helpText?: string;
   defaultValue?: string;
   placeholder?: string;
@@ -93,6 +97,11 @@ const FormBuilder = () => {
   const { data: forms, isLoading } = useFormDefinitions();
   const saveFieldsMutation = useSaveFormFields();
   const publishMutation = usePublishForm();
+
+  const selectedForm = forms?.find((f) => f.id === selectedFormId);
+  
+  // Get core fields for the selected form's asset type
+  const { data: coreFields } = useAssetTypeFields(selectedForm?.asset_type_id || null);
  
    // Select first form if none selected
    useEffect(() => {
@@ -106,27 +115,47 @@ const FormBuilder = () => {
      if (selectedFormId && forms) {
        const form = forms.find((f) => f.id === selectedFormId);
        if (form?.form_fields) {
-         const loadedFields: Field[] = form.form_fields.map((f) => ({
-           id: f.id,
-           field_key: f.field_key,
-           label: f.label,
-           type: f.field_type,
-           icon: getIconForType(f.field_type),
-           required: f.is_required,
-           readOnly: f.is_readonly,
-           isSystem: f.is_system_field,
-           helpText: f.help_text || undefined,
-           defaultValue: f.default_value || undefined,
-         }));
+         const loadedFields: Field[] = form.form_fields
+           .filter((f) => !f.is_system_field) // Exclude system fields from canvas
+           .map((f) => ({
+             id: f.id,
+             field_key: f.field_key,
+             label: f.label,
+             type: f.field_type,
+             icon: getIconForType(f.field_type),
+             required: f.is_required,
+             readOnly: f.is_readonly,
+             isSystem: f.is_system_field,
+             helpText: f.help_text || undefined,
+             defaultValue: f.default_value || undefined,
+             options: f.options ? (Array.isArray(f.options) ? f.options : []) : undefined,
+           }));
          setFormFields(loadedFields);
+         
+         // Also populate library fields from saved fields
+         const customFields = form.form_fields.filter((f) => !f.is_system_field);
+         if (customFields.length > 0 && libraryFields.length === 0) {
+           setLibraryFields(customFields.map((f) => ({
+             id: `lib-${f.id}`,
+             field_key: f.field_key,
+             label: f.label,
+             type: f.field_type,
+             icon: getIconForType(f.field_type),
+             required: f.is_required,
+             readOnly: f.is_readonly,
+             isSystem: false,
+             helpText: f.help_text || undefined,
+             defaultValue: f.default_value || undefined,
+             options: f.options ? (Array.isArray(f.options) ? f.options : []) : undefined,
+           })));
+         }
+         
          setHasUnsavedChanges(false);
        } else {
          setFormFields([]);
        }
      }
    }, [selectedFormId, forms]);
- 
-   const selectedForm = forms?.find((f) => f.id === selectedFormId);
 
   const handleDragStart = (e: React.DragEvent, field: Field) => {
     e.dataTransfer.setData("field", JSON.stringify(field));
@@ -177,8 +206,8 @@ const FormBuilder = () => {
        column_span: 1,
        help_text: f.helpText || null,
        default_value: f.defaultValue || null,
-       placeholder: null,
-       options: null,
+       placeholder: f.placeholder || null,
+       options: f.options ? f.options : null,
        validation_rules: null,
        section: null,
      }));
@@ -199,6 +228,20 @@ const FormBuilder = () => {
      setFormFields(formFields.map((f) => (f.id === selectedField.id ? updated : f)));
      setHasUnsavedChanges(true);
    };
+
+  // Convert core fields to display format
+  const coreFieldsForDisplay: Field[] = coreFields?.map((f) => ({
+    id: `core-${f.id}`,
+    field_key: f.field_key,
+    label: f.label,
+    type: f.field_type,
+    icon: getIconForType(f.field_type),
+    required: f.is_required,
+    readOnly: true,
+    isSystem: false,
+    isCoreField: true,
+    helpText: f.help_text || undefined,
+  })) || [];
 
   return (
     <div className="space-y-6">
@@ -309,6 +352,37 @@ const FormBuilder = () => {
               </div>
             </CardHeader>
             <CardContent className="flex-1 overflow-y-auto space-y-4 pt-0">
+              {/* Core Fields (Inherited from Asset Type) */}
+              {coreFieldsForDisplay.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Shield className="w-3.5 h-3.5 text-primary" />
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      Core Fields (Inherited)
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    {coreFieldsForDisplay.map((field) => (
+                      <div
+                        key={field.id}
+                        className="flex items-center gap-3 p-2.5 rounded-lg border border-primary/20 bg-primary/5 opacity-75"
+                      >
+                        <Lock className="w-4 h-4 text-primary/60" />
+                        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                          <field.icon className="w-4 h-4 text-primary" />
+                        </div>
+                        <span className="text-sm font-medium text-primary/80">{field.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2 italic">
+                    Core fields are defined in Entity Designer and appear automatically
+                  </p>
+                </div>
+              )}
+
+              {coreFieldsForDisplay.length > 0 && <Separator />}
+
               {/* System Fields */}
               <div>
                 <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">
@@ -333,11 +407,11 @@ const FormBuilder = () => {
               </div>
 
               {/* Custom Fields from Library */}
-              {libraryFields.length > 0 && (
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">
-                    Your Fields
-                  </p>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">
+                  Custom Fields
+                </p>
+                {libraryFields.length > 0 ? (
                   <div className="space-y-2">
                     {libraryFields.map((field) => (
                       <div
@@ -354,17 +428,14 @@ const FormBuilder = () => {
                       </div>
                     ))}
                   </div>
-                </div>
-              )}
-
-              {/* Add New Field Button */}
-              <div>
-                <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">
-                  Create Field
-                </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground italic mb-2">
+                    No custom fields yet. Create one below.
+                  </p>
+                )}
                 <Button 
                   variant="outline" 
-                  className="w-full justify-start gap-2"
+                  className="w-full justify-start gap-2 mt-2"
                   onClick={() => setAddFieldModalOpen(true)}
                 >
                   <Plus className="w-4 h-4" />
@@ -419,7 +490,46 @@ const FormBuilder = () => {
               onDragOver={handleDragOver}
             >
               <div className="form-canvas min-h-full p-4">
-                {formFields.length === 0 ? (
+                {/* Show Core Fields as Locked */}
+                {coreFieldsForDisplay.length > 0 && (
+                  <div className="mb-6">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Shield className="w-4 h-4 text-primary" />
+                      <span className="text-sm font-medium text-muted-foreground">Core Fields (Locked)</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      {coreFieldsForDisplay.map((field) => (
+                        <div
+                          key={field.id}
+                          className="p-4 rounded-lg border-2 border-dashed border-primary/30 bg-primary/5"
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <Lock className="w-3.5 h-3.5 text-primary/60" />
+                              <Label className="text-sm font-medium text-primary/80">{field.label}</Label>
+                              {field.required && (
+                                <Asterisk className="w-3 h-3 text-destructive" />
+                              )}
+                            </div>
+                          </div>
+                          <Input
+                            placeholder={`Enter ${field.label.toLowerCase()}...`}
+                            disabled
+                            className="bg-muted/50"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Separator between core and custom fields */}
+                {coreFieldsForDisplay.length > 0 && formFields.length > 0 && (
+                  <Separator className="my-6" />
+                )}
+
+                {/* Custom Fields */}
+                {formFields.length === 0 && coreFieldsForDisplay.length === 0 ? (
                   <div className="h-full flex items-center justify-center text-muted-foreground">
                     <div className="text-center">
                       <Plus className="w-12 h-12 mx-auto mb-3 opacity-40" />
@@ -427,51 +537,63 @@ const FormBuilder = () => {
                       <p className="text-sm">Drag fields from the library to build your form</p>
                     </div>
                   </div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-4">
-                    {formFields.map((field, index) => (
-                      <motion.div
-                        key={field.id}
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ delay: index * 0.05 }}
-                        onClick={() => setSelectedField(field)}
-                        className={`p-4 rounded-lg border-2 bg-card cursor-pointer transition-all ${
-                          selectedField?.id === field.id
-                            ? "border-primary shadow-sm"
-                            : "border-transparent hover:border-border"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <Label className="text-sm font-medium">{field.label}</Label>
-                            {field.required && (
-                              <Asterisk className="w-3 h-3 text-destructive" />
-                            )}
-                            {field.readOnly && (
-                              <Lock className="w-3 h-3 text-muted-foreground" />
-                            )}
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 opacity-0 group-hover:opacity-100"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              removeField(field.id);
-                            }}
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
-                        </div>
-                        <Input
-                          placeholder={`Enter ${field.label.toLowerCase()}...`}
-                          disabled
-                          className="bg-muted/50"
-                        />
-                      </motion.div>
-                    ))}
+                ) : formFields.length === 0 && coreFieldsForDisplay.length > 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Plus className="w-10 h-10 mx-auto mb-2 opacity-40" />
+                    <p className="text-sm">Add custom fields below the core fields</p>
                   </div>
+                ) : (
+                  <>
+                    {formFields.length > 0 && coreFieldsForDisplay.length > 0 && (
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="text-sm font-medium text-muted-foreground">Custom Fields</span>
+                      </div>
+                    )}
+                    <div className="grid grid-cols-2 gap-4">
+                      {formFields.map((field, index) => (
+                        <motion.div
+                          key={field.id}
+                          initial={{ opacity: 0, scale: 0.95 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          transition={{ delay: index * 0.05 }}
+                          onClick={() => setSelectedField(field)}
+                          className={`p-4 rounded-lg border-2 bg-card cursor-pointer transition-all ${
+                            selectedField?.id === field.id
+                              ? "border-primary shadow-sm"
+                              : "border-transparent hover:border-border"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <Label className="text-sm font-medium">{field.label}</Label>
+                              {field.required && (
+                                <Asterisk className="w-3 h-3 text-destructive" />
+                              )}
+                              {field.readOnly && (
+                                <Lock className="w-3 h-3 text-muted-foreground" />
+                              )}
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 opacity-0 group-hover:opacity-100"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeField(field.id);
+                              }}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
+                          <Input
+                            placeholder={`Enter ${field.label.toLowerCase()}...`}
+                            disabled
+                            className="bg-muted/50"
+                          />
+                        </motion.div>
+                      ))}
+                    </div>
+                  </>
                 )}
               </div>
             </CardContent>
