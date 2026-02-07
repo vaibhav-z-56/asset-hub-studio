@@ -14,6 +14,68 @@ export type Database = {
   }
   public: {
     Tables: {
+      asset_type_fields: {
+        Row: {
+          asset_type_id: string
+          created_at: string
+          default_value: string | null
+          field_key: string
+          field_type: string
+          help_text: string | null
+          id: string
+          is_readonly: boolean
+          is_required: boolean
+          label: string
+          options: Json | null
+          placeholder: string | null
+          sort_order: number
+          updated_at: string
+          validation_rules: Json | null
+        }
+        Insert: {
+          asset_type_id: string
+          created_at?: string
+          default_value?: string | null
+          field_key: string
+          field_type?: string
+          help_text?: string | null
+          id?: string
+          is_readonly?: boolean
+          is_required?: boolean
+          label: string
+          options?: Json | null
+          placeholder?: string | null
+          sort_order?: number
+          updated_at?: string
+          validation_rules?: Json | null
+        }
+        Update: {
+          asset_type_id?: string
+          created_at?: string
+          default_value?: string | null
+          field_key?: string
+          field_type?: string
+          help_text?: string | null
+          id?: string
+          is_readonly?: boolean
+          is_required?: boolean
+          label?: string
+          options?: Json | null
+          placeholder?: string | null
+          sort_order?: number
+          updated_at?: string
+          validation_rules?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asset_type_fields_asset_type_id_fkey"
+            columns: ["asset_type_id"]
+            isOneToOne: false
+            referencedRelation: "asset_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       asset_types: {
         Row: {
           created_at: string
